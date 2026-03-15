@@ -1,19 +1,8 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import { Line, LineChart, Tooltip, XAxis, YAxis } from "recharts";
+import { useEffect, useState } from "react";
 import { fetchKline, fetchSearch, fetchSymbols, KlineItem, SearchResult } from "../lib/api";
-
-function toNormSeries(items: KlineItem[]) {
-  if (!items.length) return [];
-  const base = items[0].close || 1;
-  return items.map((it, idx) => ({
-    idx,
-    date: it.date,
-    close: it.close,
-    norm: it.close / base,
-  }));
-}
+import CandlestickChart from "../components/CandlestickChart";
 
 export default function HomePage() {
   const [symbols, setSymbols] = useState<string[]>([]);
@@ -36,9 +25,6 @@ export default function HomePage() {
       })
       .catch((e: Error) => setError(e.message));
   }, []);
-
-  const norm = useMemo(() => toNormSeries(kline), [kline]);
-  const chartWidth = useMemo(() => Math.max(720, norm.length * 4), [norm.length]);
 
   async function handleLoadKline() {
     setLoading(true);
@@ -111,18 +97,11 @@ export default function HomePage() {
       </section>
 
       <section className="card">
-        <h3>目标股票归一化走势</h3>
-        {norm.length === 0 ? (
+        <h3>目标股票K线图</h3>
+        {kline.length === 0 ? (
           <p>暂无数据，请先点击“查看目标K线”。</p>
         ) : (
-          <div style={{ width: "100%", overflowX: "auto" }}>
-            <LineChart width={chartWidth} height={320} data={norm}>
-              <XAxis dataKey="idx" minTickGap={24} />
-              <YAxis domain={["auto", "auto"]} />
-              <Tooltip />
-              <Line type="monotone" dataKey="norm" stroke="#2563eb" dot={false} />
-            </LineChart>
-          </div>
+          <CandlestickChart items={kline} height={360} />
         )}
       </section>
 
