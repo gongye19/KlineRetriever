@@ -4,6 +4,10 @@ import { useEffect, useState } from "react";
 import { fetchKline, fetchSearch, fetchSymbols, KlineItem, SearchResult } from "../lib/api";
 import CandlestickChart from "../components/CandlestickChart";
 
+function resultKey(item: SearchResult): string {
+  return `${item.symbol}|${item.start_date}|${item.end_date}`;
+}
+
 export default function HomePage() {
   const [symbols, setSymbols] = useState<string[]>([]);
   const [symbol, setSymbol] = useState("AAPL");
@@ -12,6 +16,7 @@ export default function HomePage() {
   const [end, setEnd] = useState("2024-12-31");
   const [kline, setKline] = useState<KlineItem[]>([]);
   const [results, setResults] = useState<SearchResult[]>([]);
+  const [resultKlines, setResultKlines] = useState<Record<string, KlineItem[]>>({});
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
@@ -42,9 +47,29 @@ export default function HomePage() {
   async function handleSearch() {
     setLoading(true);
     setError("");
+    setResultKlines({});
     try {
       const data = await fetchSearch({ symbol, interval, start, end, top_n: 10 });
       setResults(data);
+
+      const settled = await Promise.allSettled(
+        data.map(async (item) => {
+          const items = await fetchKline({
+            symbol: item.symbol,
+            interval,
+            start: item.start_date,
+            end: item.end_date,
+          });
+          return { key: resultKey(item), items };
+        })
+      );
+      const nextMap: Record<string, KlineItem[]> = {};
+      for (const row of settled) {
+        if (row.status === "fulfilled") {
+          nextMap[row.value.key] = row.value.items;
+        }
+      }
+      setResultKlines(nextMap);
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -55,7 +80,7 @@ export default function HomePage() {
   return (
     <main className="container">
       <h1>Kline Retriever 前端</h1>
-      <p>先加载目标股票 K 线，再按比例变化检索最相似 Top10。</p>
+      <p>先加载目标股票 K 线，再按同周期+同区间长度检索历史最相似 Top10。</p>
 
       <section className="card">
         <div className="row">
@@ -110,28 +135,52 @@ export default function HomePage() {
         {results.length === 0 ? (
           <p>暂无结果，请先点击“检索相似 Top10”。</p>
         ) : (
-          <table>
-            <thead>
-              <tr>
-                <th>排名</th>
-                <th>代码</th>
-                <th>相似度</th>
-                <th>窗口</th>
-              </tr>
-            </thead>
-            <tbody>
-              {results.map((r, idx) => (
-                <tr key={`${r.symbol}-${idx}`}>
-                  <td>{idx + 1}</td>
-                  <td>{r.symbol}</td>
-                  <td>{r.score.toFixed(6)}</td>
-                  <td>
-                    {r.start_date} ~ {r.end_date}
-                  </td>
+          <>
+            <table>
+              <thead>
+                <tr>
+                  <th>排名</th>
+                  <th>代码</th>
+                  <th>相似度</th>
+                  <th>窗口</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {results.map((r, idx) => (
+                  <tr key={`${r.symbol}-${idx}`}>
+                    <td>{idx + 1}</td>
+                    <td>{r.symbol}</td>
+                    <td>{r.score.toFixed(6)}</td>
+                    <td>
+                      {r.start_date} ~ {r.end_date}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+
+            <div className="result-chart-grid">
+              {results.map((r, idx) => {
+                const key = resultKey(r);
+                const chartItems = resultKlines[key];
+                return (
+                  <div key={key} className="result-chart-card">
+                    <h4>
+                      #{idx + 1} {r.symbol} ({r.score.toFixed(4)})
+                    </h4>
+                    <p>
+                      {r.start_date} ~ {r.end_date}
+                    </p>
+                    {chartItems && chartItems.length > 0 ? (
+                      <CandlestickChart items={chartItems} height={220} />
+                    ) : (
+                      <p>图表加载中...</p>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </>
         )}
       </section>
     </main>

@@ -98,28 +98,31 @@ def search_similar(
                     SELECT date, close
                     FROM {table}
                     WHERE symbol = :symbol
-                      AND date >= :start
-                      AND date <= :end
                     ORDER BY date ASC;
                     """
                 ),
                 conn,
-                params={"symbol": candidate_symbol, "start": start, "end": end},
+                params={"symbol": candidate_symbol},
             )
-            if len(candidate_df) != window:
+            if len(candidate_df) < window:
                 continue
-            candidate_norm = _normalize(candidate_df["close"].astype(float).to_numpy())
-            score = _score(query_norm, candidate_norm)
-            if np.isnan(score):
-                continue
-            results.append(
-                SearchResult(
-                    symbol=candidate_symbol,
-                    score=score,
-                    start_date=str(candidate_df["date"].iloc[0]),
-                    end_date=str(candidate_df["date"].iloc[-1]),
+
+            close_values = candidate_df["close"].astype(float).to_numpy()
+            dates = candidate_df["date"].astype(str).tolist()
+            for idx in range(0, len(candidate_df) - window + 1):
+                window_close = close_values[idx : idx + window]
+                candidate_norm = _normalize(window_close)
+                score = _score(query_norm, candidate_norm)
+                if np.isnan(score):
+                    continue
+                results.append(
+                    SearchResult(
+                        symbol=candidate_symbol,
+                        score=score,
+                        start_date=dates[idx],
+                        end_date=dates[idx + window - 1],
+                    )
                 )
-            )
 
     results = sorted(results, key=lambda x: x.score, reverse=True)[:top_n]
     return query_df, results
