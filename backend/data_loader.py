@@ -8,6 +8,7 @@ import pandas as pd
 import yfinance as yf
 from sqlalchemy import text
 
+from config import get_default_symbols
 from db import get_engine, init_db
 
 
@@ -16,24 +17,6 @@ class SyncConfig:
     symbols: list[str]
     start: str
     end: str
-
-
-DEFAULT_SYMBOLS = [
-    "AAPL",
-    "MSFT",
-    "NVDA",
-    "AMZN",
-    "META",
-    "GOOGL",
-    "TSLA",
-    "JPM",
-    "XOM",
-    "WMT",
-    "KO",
-    "SPY",
-    "QQQ",
-    "IWM",
-]
 
 
 def _download(symbol: str, start: str, end: str, interval: str) -> pd.DataFrame:
@@ -136,7 +119,7 @@ def sync_data(config: SyncConfig) -> dict[str, dict[str, int]]:
 
 def incremental_sync(symbols: list[str] | None = None) -> dict[str, dict[str, int]]:
     init_db()
-    symbols = symbols or DEFAULT_SYMBOLS
+    symbols = symbols or get_default_symbols()
     _upsert_symbol(symbols)
     engine = get_engine()
     today = datetime.now().strftime("%Y-%m-%d")
@@ -163,7 +146,7 @@ def incremental_sync(symbols: list[str] | None = None) -> dict[str, dict[str, in
 def default_config() -> SyncConfig:
     today = datetime.now().strftime("%Y-%m-%d")
     return SyncConfig(
-        symbols=DEFAULT_SYMBOLS,
+        symbols=get_default_symbols(),
         start="2021-01-01",
         end=today,
     )

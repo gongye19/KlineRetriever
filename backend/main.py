@@ -6,9 +6,11 @@ import logging
 
 from apscheduler.schedulers.background import BackgroundScheduler
 from fastapi import FastAPI, HTTPException, Query
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
-from data_loader import DEFAULT_SYMBOLS, SyncConfig, incremental_sync, sync_data
+from config import get_default_symbols
+from data_loader import SyncConfig, incremental_sync, sync_data
 from db import init_db
 from search import load_symbol_series, search_similar
 
@@ -16,9 +18,19 @@ app = FastAPI(title="Kline Retriever API", version="1.0.0")
 scheduler = BackgroundScheduler(timezone="UTC")
 logger = logging.getLogger(__name__)
 
+cors_origins = os.getenv("CORS_ORIGINS", "*")
+allow_origins = [o.strip() for o in cors_origins.split(",") if o.strip()]
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=allow_origins or ["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 
 class SyncRequest(BaseModel):
-    symbols: list[str] = Field(default_factory=lambda: DEFAULT_SYMBOLS)
+    symbols: list[str] = Field(default_factory=get_default_symbols)
     start: str | None = None
     end: str | None = None
 
@@ -37,9 +49,7 @@ def _validate_interval(interval: str) -> None:
 
 
 def run_incremental_sync() -> dict[str, dict[str, int]]:
-    symbols_env = os.getenv("DEFAULT_SYMBOLS", "")
-    symbols = [s.strip().upper() for s in symbols_env.split(",") if s.strip()]
-    return incremental_sync(symbols=symbols or DEFAULT_SYMBOLS)
+    return incremental_sync(symbols=get_default_symbols())
 
 
 def safe_incremental_sync() -> None:
@@ -76,6 +86,11 @@ def on_shutdown() -> None:
 @app.get("/health")
 def health() -> dict[str, str]:
     return {"status": "ok"}
+
+
+@app.get("/symbols")
+def symbols() -> dict[str, list[str]]:
+    return {"symbols": get_default_symbols()}
 
 
 @app.post("/sync")
