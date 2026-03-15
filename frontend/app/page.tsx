@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { Line, LineChart, Tooltip, XAxis, YAxis } from "recharts";
 import { fetchKline, fetchSearch, fetchSymbols, KlineItem, SearchResult } from "../lib/api";
 
 function toNormSeries(items: KlineItem[]) {
@@ -38,6 +38,7 @@ export default function HomePage() {
   }, []);
 
   const norm = useMemo(() => toNormSeries(kline), [kline]);
+  const chartWidth = useMemo(() => Math.max(720, norm.length * 4), [norm.length]);
 
   async function handleLoadKline() {
     setLoading(true);
@@ -114,14 +115,14 @@ export default function HomePage() {
         {norm.length === 0 ? (
           <p>暂无数据，请先点击“查看目标K线”。</p>
         ) : (
-          <ResponsiveContainer width="100%" height={320}>
-            <LineChart data={norm}>
-              <XAxis dataKey="idx" />
-              <YAxis />
+          <div style={{ width: "100%", overflowX: "auto" }}>
+            <LineChart width={chartWidth} height={320} data={norm}>
+              <XAxis dataKey="idx" minTickGap={24} />
+              <YAxis domain={["auto", "auto"]} />
               <Tooltip />
               <Line type="monotone" dataKey="norm" stroke="#2563eb" dot={false} />
             </LineChart>
-          </ResponsiveContainer>
+          </div>
         )}
       </section>
 
